@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Game of Life</title>
+</head>
+<body>
+<canvas id="life" width="512" height="512"></canvas>
+
+<img id="life-src-img" src="pufferfish.bmp" style="display:none"></img>
+
+<script id="life-shader-vertex" type="x-shader/x-vertex">
+attribute vec2 aPos;
+attribute vec2 aTexCoord;
+uniform float d;
+
+varying vec2 texCoord[9];
+
+void main() {
+  gl_Position = vec4(aPos.x, aPos.y, 0, 1.0);
+  
+  texCoord[0] = vec2(aTexCoord.x - d, aTexCoord.y - d);
+  texCoord[1] = vec2(aTexCoord.x,     aTexCoord.y - d);
+  texCoord[2] = vec2(aTexCoord.x + d, aTexCoord.y - d);
+  texCoord[3] = vec2(aTexCoord.x - d, aTexCoord.y);
+  texCoord[4] = vec2(aTexCoord.x,     aTexCoord.y);
+  texCoord[5] = vec2(aTexCoord.x + d, aTexCoord.y);
+  texCoord[6] = vec2(aTexCoord.x - d, aTexCoord.y + d);
+  texCoord[7] = vec2(aTexCoord.x,     aTexCoord.y + d);
+  texCoord[8] = vec2(aTexCoord.x + d, aTexCoord.y + d);
+}
+</script>
+
+<script id="life-shader-fragment" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform sampler2D texture;
+uniform vec4 color;
+
+varying vec2 texCoord[9];
+
+void main() {
+  int surroundings = int(texture2D(texture, texCoord[0]).a) +
+                     int(texture2D(texture, texCoord[1]).a) +
+                     int(texture2D(texture, texCoord[2]).a) +
+                     int(texture2D(texture, texCoord[3]).a) +
+                     int(texture2D(texture, texCoord[5]).a) +
+                     int(texture2D(texture, texCoord[6]).a) +
+                     int(texture2D(texture, texCoord[7]).a) +
+                     int(texture2D(texture, texCoord[8]).a);
+  int cur = int(texture2D(texture, texCoord[4]).a);
+
+  gl_FragColor = vec4(color.r, color.g, color.b, surroundings == 3 || surroundings == 2 && cur == 1 ? 1.0 : 0.0);
+}
+</script>
+
+<script id="life-shader-render-vertex" type="x-shader/x-vertex">
+attribute vec2 aPos;
+attribute vec2 aTexCoord;
+
+varying vec2 texCoord;
+
+void main() {
+    gl_Position = vec4(aPos.x, aPos.y, 0, 1.0);
+    texCoord = aTexCoord;
+}
+</script>
+<script id="life-shader-render-fragment" type="x-shader/x-fragment">
+precision mediump float;
+
+uniform sampler2D texture;
+
+varying vec2 texCoord;
+
+void main() {
+  vec4 color = texture2D(texture, texCoord);
+  gl_FragColor = color;
+}
+</script>
+
+<script type="text/javascript">
+
+var canvas = document.getElementById("life");
+var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+
+if (!gl)
+  throw new Error("WebGL not available. Can't render life patterns.");
+
+var vertexBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  -1.0, -1.0,
+  1.0, -1.0,
+  -1.0, 1.0,
+  1.0, 1.0
+  ]), gl.STATIC_DRAW);
+
+var texCoordBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  0.0, 0.0,
+  1.0, 0.0,
+  0.0, 1.0,
+  1.0, 1.0
+  ]), gl.STATIC_DRAW);
+
+gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+var textures = [];
+
+textures[0] = gl.createTexture();
+var img = document.getElementById("life-src-img");
+img.addEventListener('load', function () {
+  console.log("loading texture 1");
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, textures[0]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+});
+
+textures[1] = gl.createTexture();
+gl.activeTexture(gl.TEXTURE1);
+gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 128, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+
+var renderProgram = gl.createProgram();
+gl.attachShader(renderProgram, loadShader("life-shader-render-vertex"));
+gl.attachShader(renderProgram, loadShader("life-shader-render-fragment"));
+gl.linkProgram(renderProgram);
+
+
+gl.useProgram(renderProgram);
+
+var renderPosAttribute = gl.getAttribLocation(renderProgram, "aPos");
+gl.enableVertexAttribArray(renderPosAttribute);
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+gl.vertexAttribPointer(renderPosAttribute, 2, gl.FLOAT, false, 0, 0);
+
+var renderTexCoordAttribute = gl.getAttribLocation(renderProgram, "aTexCoord");
+gl.enableVertexAttribArray(renderTexCoordAttribute);
+gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+gl.vertexAttribPointer(renderTexCoordAttribute, 2, gl.FLOAT, false, 0, 0);
+
+var renderTextureAttribute = gl.getUniformLocation(renderProgram, "texture");
+
+
+var lifeProgram = gl.createProgram();
+gl.attachShader(lifeProgram, loadShader("life-shader-vertex"));
+gl.attachShader(lifeProgram, loadShader("life-shader-fragment"));
+gl.linkProgram(lifeProgram);
+
+
+gl.useProgram(lifeProgram);
+
+var posAttribute = gl.getAttribLocation(lifeProgram, "aPos");
+gl.enableVertexAttribArray(posAttribute);
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+gl.vertexAttribPointer(posAttribute, 2, gl.FLOAT, false, 0, 0);
+
+var texCoordAttribute = gl.getAttribLocation(lifeProgram, "aTexCoord");
+gl.enableVertexAttribArray(texCoordAttribute);
+gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+gl.vertexAttribPointer(texCoordAttribute, 2, gl.FLOAT, false, 0, 0);
+
+gl.uniform1f(gl.getUniformLocation(lifeProgram, "d"), 1.0/128.0);
+gl.uniform4f(gl.getUniformLocation(lifeProgram, "color"), 0.0, 0.0, 0.0, 1.0);
+
+var textureAttribute = gl.getUniformLocation(lifeProgram, "texture");
+
+img.addEventListener('load', function () {
+  setInterval(tick, 35);
+  /*render(0);
+  render(1);
+  render(0);
+  render(1);*/
+});
+
+var frame = 0;
+function tick() {
+  console.log("tick");
+  render();
+
+  gl.useProgram(lifeProgram);
+
+  gl.uniform1i(textureAttribute, frame % 2);
+
+  var framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[(frame+1) % 2], 0);
+
+  gl.viewport(0,0,128,128);
+
+  gl.clearColor(0.0, 0.0, 0.0, 0.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draws to framebuffer
+
+  frame++;
+}
+
+function render() {
+  gl.useProgram(renderProgram);
+
+  gl.uniform1i(renderTextureAttribute, frame % 2);
+  
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  
+  gl.viewport(0,0,512,512);
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+
+function loadShader(id) {
+  var script = document.getElementById(id);
+  if (!script)
+    throw new Error("Invalid shader id.");
+
+  var source = "";
+  for (var child = script.firstChild; child; child = child.nextSibling) {
+    if (child.nodeType == child.TEXT_NODE)
+      source += child.textContent;
+  }
+
+  var shader;
+  if (script.type == "x-shader/x-vertex")
+    shader = gl.createShader(gl.VERTEX_SHADER);
+  else if (script.type == "x-shader/x-fragment")
+    shader = gl.createShader(gl.FRAGMENT_SHADER);
+  else
+    throw new Error("Invalid shader type.");
+
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+    throw new Error("An error occured compiling the shader " + id + ": " + gl.getShaderInfoLog(shader));
+
+  return shader;
+}
+
+</script>
+</body>
