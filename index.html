@@ -2,32 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
   <title>Game of Life</title>
+  <style>
+    html {
+      height: 100%;
+    }
+    body {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0;
+      background-color: black;
+    }
+    #life-div {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+    #life {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
 </head>
 <body>
-<canvas id="life" width="512" height="512"></canvas>
-
-<img id="life-src-img" src="pufferfish.bmp" style="display:none"></img>
+<div id="life-div">
+  <canvas id="life"></canvas>
+</div>
 
 <script id="life-shader-vertex" type="x-shader/x-vertex">
 attribute vec2 aPos;
 attribute vec2 aTexCoord;
-uniform float d;
+uniform vec2 d;
 
 varying vec2 texCoord[9];
 
 void main() {
   gl_Position = vec4(aPos.x, aPos.y, 0, 1.0);
   
-  texCoord[0] = vec2(aTexCoord.x - d, aTexCoord.y - d);
-  texCoord[1] = vec2(aTexCoord.x,     aTexCoord.y - d);
-  texCoord[2] = vec2(aTexCoord.x + d, aTexCoord.y - d);
-  texCoord[3] = vec2(aTexCoord.x - d, aTexCoord.y);
-  texCoord[4] = vec2(aTexCoord.x,     aTexCoord.y);
-  texCoord[5] = vec2(aTexCoord.x + d, aTexCoord.y);
-  texCoord[6] = vec2(aTexCoord.x - d, aTexCoord.y + d);
-  texCoord[7] = vec2(aTexCoord.x,     aTexCoord.y + d);
-  texCoord[8] = vec2(aTexCoord.x + d, aTexCoord.y + d);
+  texCoord[0] = vec2(aTexCoord.x - d.x, aTexCoord.y - d.y);
+  texCoord[1] = vec2(aTexCoord.x,       aTexCoord.y - d.y);
+  texCoord[2] = vec2(aTexCoord.x + d.x, aTexCoord.y - d.y);
+  texCoord[3] = vec2(aTexCoord.x - d.x, aTexCoord.y);
+  texCoord[4] = vec2(aTexCoord.x,       aTexCoord.y);
+  texCoord[5] = vec2(aTexCoord.x + d.x, aTexCoord.y);
+  texCoord[6] = vec2(aTexCoord.x - d.x, aTexCoord.y + d.y);
+  texCoord[7] = vec2(aTexCoord.x,       aTexCoord.y + d.y);
+  texCoord[8] = vec2(aTexCoord.x + d.x, aTexCoord.y + d.y);
 }
 </script>
 
@@ -79,8 +103,20 @@ void main() {
 </script>
 
 <script type="text/javascript">
-
 var canvas = document.getElementById("life");
+var style = getComputedStyle(canvas);
+
+var scale = 2;
+var width = Math.floor(parseInt(style.width) / scale);
+var height = Math.floor(parseInt(style.height) / scale);
+canvas.width = width * scale;
+canvas.height = height * scale;
+canvas.style.width = width * scale + "px";
+canvas.style.height = height * scale + "px";
+
+console.log("size: " + width + "x" + height);
+
+
 var gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
 
 if (!gl)
@@ -107,49 +143,22 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
 gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
 var textures = [];
+var framebuffers = [];
 
-textures[0] = gl.createTexture();
-var img = document.getElementById("life-src-img");
-img.addEventListener('load', function () {
-  console.log("loading texture 1");
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, textures[0]);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+for (var i = 0; i < 2; i++) {
+  textures[i] = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + i);
+  gl.bindTexture(gl.TEXTURE_2D, textures[i]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-});
 
-textures[1] = gl.createTexture();
-gl.activeTexture(gl.TEXTURE1);
-gl.bindTexture(gl.TEXTURE_2D, textures[1]);
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 128, 128, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-
-var renderProgram = gl.createProgram();
-gl.attachShader(renderProgram, loadShader("life-shader-render-vertex"));
-gl.attachShader(renderProgram, loadShader("life-shader-render-fragment"));
-gl.linkProgram(renderProgram);
-
-
-gl.useProgram(renderProgram);
-
-var renderPosAttribute = gl.getAttribLocation(renderProgram, "aPos");
-gl.enableVertexAttribArray(renderPosAttribute);
-gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-gl.vertexAttribPointer(renderPosAttribute, 2, gl.FLOAT, false, 0, 0);
-
-var renderTexCoordAttribute = gl.getAttribLocation(renderProgram, "aTexCoord");
-gl.enableVertexAttribArray(renderTexCoordAttribute);
-gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-gl.vertexAttribPointer(renderTexCoordAttribute, 2, gl.FLOAT, false, 0, 0);
-
-var renderTextureAttribute = gl.getUniformLocation(renderProgram, "texture");
+  framebuffers[i] = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[i]);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[i], 0);
+}
 
 
 var lifeProgram = gl.createProgram();
@@ -170,20 +179,40 @@ gl.enableVertexAttribArray(texCoordAttribute);
 gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
 gl.vertexAttribPointer(texCoordAttribute, 2, gl.FLOAT, false, 0, 0);
 
-gl.uniform1f(gl.getUniformLocation(lifeProgram, "d"), 1.0/128.0);
-gl.uniform4f(gl.getUniformLocation(lifeProgram, "color"), 0.0, 0.0, 0.0, 1.0);
+gl.uniform2f(gl.getUniformLocation(lifeProgram, "d"), 1/width, 1/height);
+gl.uniform4f(gl.getUniformLocation(lifeProgram, "color"), 1.0, 1.0, 1.0, 1.0);
 
 var textureAttribute = gl.getUniformLocation(lifeProgram, "texture");
 
-img.addEventListener('load', function () {
-  setInterval(tick, 35);
-  /*render(0);
-  render(1);
-  render(0);
-  render(1);*/
-});
+
+var renderProgram = gl.createProgram();
+gl.attachShader(renderProgram, loadShader("life-shader-render-vertex"));
+gl.attachShader(renderProgram, loadShader("life-shader-render-fragment"));
+gl.linkProgram(renderProgram);
+
+gl.useProgram(renderProgram);
+
+var renderPosAttribute = gl.getAttribLocation(renderProgram, "aPos");
+gl.enableVertexAttribArray(renderPosAttribute);
+
+var renderTexCoordAttribute = gl.getAttribLocation(renderProgram, "aTexCoord");
+gl.enableVertexAttribArray(renderTexCoordAttribute);
+gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+gl.vertexAttribPointer(renderTexCoordAttribute, 2, gl.FLOAT, false, 0, 0);
+
+var renderTextureAttribute = gl.getUniformLocation(renderProgram, "texture");
+
 
 var frame = 0;
+loadImg("breeder.png", function (err, texture) {
+  if (err)
+    throw err;
+
+  renderTexture(texture, 5, height - texture.height - 5, 0);
+
+  setInterval(tick, 35);
+});
+
 function tick() {
   console.log("tick");
   render();
@@ -192,11 +221,9 @@ function tick() {
 
   gl.uniform1i(textureAttribute, frame % 2);
 
-  var framebuffer = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[(frame+1) % 2], 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[(frame + 1) % 2]);
 
-  gl.viewport(0,0,128,128);
+  gl.viewport(0,0,width,height);
 
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -207,16 +234,104 @@ function tick() {
 }
 
 function render() {
+  console.log("rendering frame " + frame);
   gl.useProgram(renderProgram);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.vertexAttribPointer(renderPosAttribute, 2, gl.FLOAT, false, 0, 0);
 
   gl.uniform1i(renderTextureAttribute, frame % 2);
   
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   
-  gl.viewport(0,0,512,512);
+  gl.viewport(0,0,width*scale,height*scale);
 
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function loadImg(path, done) {
+  var img = new Image();
+  img.onload = function () {
+    gl.useProgram(renderProgram);
+
+    var texture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    texture.width = img.width;
+    texture.height = img.height;
+
+    console.log("loaded img " + img.width + "x" + img.height);
+
+    done(null, texture);
+  };
+  img.src = path;
+}
+
+function renderTexture(texture, x, y, rot) {
+  console.log("rendering texture");
+  gl.useProgram(renderProgram);
+
+  var top = 1 - y / height * 2;
+  var left = x / width * 2 - 1;
+  var bottom = 1 - (y + texture.height) / height * 2;
+  var right = (x + texture.width) / width * 2 - 1;
+
+  var vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  var data;
+  if (rot == 0)
+    data = new Float32Array([
+      x / width * 2 - 1,                    1 - y / height * 2,
+      (x + texture.width) / width * 2 - 1,  1 - y / height * 2,
+      x / width * 2 - 1,                    1 - (y + texture.height) / height * 2,
+      (x + texture.width) / width * 2 - 1,  1 - (y + texture.height) / height * 2
+      ]);
+  else if (rot == 1)
+    data = new Float32Array([
+      x / width * 2 - 1,                    1 - (y + texture.width) / height * 2,
+      x / width * 2 - 1,                    1 - y / height * 2,
+      (x + texture.height) / width * 2 - 1, 1 - (y + texture.width) / height * 2,
+      (x + texture.height) / width * 2 - 1, 1 - y / height * 2
+      ]);
+  else if (rot == 2)
+    data = new Float32Array([
+      (x + texture.width) / width * 2 - 1,  1 - (y + texture.height) / height * 2,
+      x / width * 2 - 1,                    1 - (y + texture.height) / height * 2,
+      (x + texture.width) / width * 2 - 1,  1 - y / height * 2,
+      x / width * 2 - 1,                    1 - y / height * 2
+      ]);
+  else if (rot == 3)
+    data = new Float32Array([
+      (x + texture.height) / width * 2 - 1, 1 - y / height * 2,
+      (x + texture.height) / width * 2 - 1, 1 - (y + texture.width) / height * 2,
+      x / width * 2 - 1,                    1 - y / height * 2,
+      x / width * 2 - 1,                    1 - (y + texture.width) / height * 2
+    ]);
+
+  console.log(data);
+
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.vertexAttribPointer(renderPosAttribute, 2, gl.FLOAT, false, 0, 0);
+
+  gl.uniform1i(renderTextureAttribute, 2);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[frame % 2]);
+
+  gl.viewport(0,0,width,height);
+
+  //gl.enable(gl.BLEND);
+  //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
@@ -249,6 +364,5 @@ function loadShader(id) {
 
   return shader;
 }
-
 </script>
 </body>
