@@ -1,0 +1,3 @@
+[submodule "spl-t"]
+	path = spl-t
+	url = https://github.com/tdanecker/spl-t.git
