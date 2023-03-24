@@ -1,6 +1,9 @@
 [submodule "spl-t"]
 	path = spl-t
-	url = https://github.com/tdanecker/spl-t.git
+	url = git@github.com:tdanecker/spl-t.git
 [submodule "webgl-game-of-life"]
 	path = webgl-game-of-life
 	url = git@github.com:tdanecker/webgl-game-of-life.git
+[submodule "themes/anatole-zola"]
+	path = themes/anatole-zola
+	url = https://github.com/longfangsong/anatole-zola.git
